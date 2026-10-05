@@ -5,6 +5,10 @@ on:
     branches:
       - main
   workflow_dispatch:
+
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build
@@ -70,4 +74,13 @@ jobs:
         run: |
             coverage=$(jq '.total.lines.pct' coverage/coverage-summary.json)
             color=$(echo "$coverage < 80" | bc | awk '{if ($1) print "red"; else print "green"}')
-            curl -s -X POST "https://pizza-factory.cs329.click/api/badge/${{ secrets.NET_ID }}/jwtpizzaservicecoverage?label=Coverage&value=$coverage%25&color=$color" -H "authorization: bearer ${{ secrets.FACTORY_API_KEY }}"
+            curl --fail-with-body -sS -X POST "https://pizza-factory.cs329.click/api/badge/${{ secrets.NET_ID }}/jwtpizzaservicecoverage?label=Coverage&value=$coverage%25&color=$color" -H "authorization: bearer ${{ secrets.FACTORY_API_KEY }}"
+
+      - name: Refresh README badge URL
+        run: |
+            sed -i -E "s/cachebust=[^)]*/cachebust=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/" README.md
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add README.md
+            git diff --cached --quiet || git commit -m "chore: refresh coverage badge [skip ci]"
+            git push
