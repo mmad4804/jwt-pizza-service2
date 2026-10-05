@@ -36,6 +36,14 @@ test('login', async () => {
   expect(loginRes.body.user).toMatchObject(expectedUser);
 });
 
+test('logout user', async () => {
+  const res = await request(app)
+    .delete('/api/auth')
+    .set('Authorization', `Bearer ${testUserAuthToken}`); // Use a token from a previous login step
+  expect(res.status).toBe(200);
+  expect(res.body.message).toBe('logout successful');
+});
+
 function expectValidJwt(potentialJwt) {
   expect(potentialJwt).toMatch(/^[a-zA-Z0-9\-_]*\.[a-zA-Z0-9\-_]*\.[a-zA-Z0-9\-_]*$/);
 }
