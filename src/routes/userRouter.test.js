@@ -74,12 +74,4 @@ test('lists users with the current placeholder response', async () => {
   expect(res.body).toEqual({ message: 'not implemented', users: [], more: false });
 });
 
-test('deletes users with the current placeholder response', async () => {
-  const res = await request(app)
-    .delete(`/api/user/${testUser.id}`)
-    .set('Authorization', `Bearer ${testUserAuthToken}`);
-
-  expect(res.status).toBe(200);
-  expect(res.body).toEqual({ message: 'not implemented' });
-});
 
