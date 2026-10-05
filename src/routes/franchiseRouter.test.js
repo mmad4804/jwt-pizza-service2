@@ -1,5 +1,6 @@
 const request = require('supertest');
 const app = require('../service');
+const { DB, Role } = require('../database/database.js');
 
 const unique = (prefix) => `${prefix}-${Math.random().toString(36).substring(2, 10)}`;
 
@@ -8,9 +9,13 @@ let franchiseAdmin;
 let franchiseAdminToken;
 let strangerToken;
 let franchise;
+let adminEmail;
 
 beforeAll(async () => {
-  const adminLoginRes = await request(app).put('/api/auth').send({ email: 'a@jwt.com', password: 'admin' });
+  adminEmail = `${unique('franchise-admin')}@test.com`;
+  await DB.addUser({ name: unique('franchise admin'), email: adminEmail, password: 'admin', roles: [{ role: Role.Admin }] });
+
+  const adminLoginRes = await request(app).put('/api/auth').send({ email: adminEmail, password: 'admin' });
   expect(adminLoginRes.status).toBe(200);
   adminToken = adminLoginRes.body.token;
 

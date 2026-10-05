@@ -1,5 +1,6 @@
 const request = require('supertest');
 const app = require('../service');
+const { DB, Role } = require('../database/database.js');
 
 const unique = (prefix) => `${prefix}-${Math.random().toString(36).substring(2, 10)}`;
 
@@ -8,6 +9,7 @@ let adminToken;
 let menuItem;
 let franchise;
 let store;
+let adminEmail;
 
 beforeAll(async () => {
   const dinerRes = await request(app).post('/api/auth').send({
@@ -18,7 +20,10 @@ beforeAll(async () => {
   expect(dinerRes.status).toBe(200);
   dinerToken = dinerRes.body.token;
 
-  const adminLoginRes = await request(app).put('/api/auth').send({ email: 'a@jwt.com', password: 'admin' });
+  adminEmail = `${unique('order-admin')}@test.com`;
+  await DB.addUser({ name: unique('order admin'), email: adminEmail, password: 'admin', roles: [{ role: Role.Admin }] });
+
+  const adminLoginRes = await request(app).put('/api/auth').send({ email: adminEmail, password: 'admin' });
   expect(adminLoginRes.status).toBe(200);
   adminToken = adminLoginRes.body.token;
 
@@ -32,7 +37,7 @@ beforeAll(async () => {
   const franchiseRes = await request(app)
     .post('/api/franchise')
     .set('Authorization', `Bearer ${adminToken}`)
-    .send({ name: unique('Order franchise'), admins: [{ email: 'a@jwt.com' }] });
+    .send({ name: unique('Order franchise'), admins: [{ email: adminEmail }] });
   expect(franchiseRes.status).toBe(200);
   franchise = franchiseRes.body;
 
