@@ -78,22 +78,99 @@ class DB {
   async updateUser(userId, name, email, password) {
     const connection = await this.getConnection();
     try {
-      const params = [];
+      const fields = [];
+      const values = [];
       if (password) {
-        const hashedPassword = await bcrypt.hash(password, 10);
-        params.push(`password='${hashedPassword}'`);
+        fields.push('password=?');
+        values.push(await bcrypt.hash(password, 10));
       }
       if (email) {
-        params.push(`email='${email}'`);
+        fields.push('email=?');
+        values.push(email);
       }
       if (name) {
-        params.push(`name='${name}'`);
+        fields.push('name=?');
+        values.push(name);
       }
-      if (params.length > 0) {
-        const query = `UPDATE user SET ${params.join(', ')} WHERE id=${userId}`;
-        await this.query(connection, query);
+      if (fields.length > 0) {
+        await this.query(connection, `UPDATE user SET ${fields.join(', ')} WHERE id=?`, [...values, userId]);
       }
-      return this.getUser(email, password);
+      return this.getUserById(userId);
+    } finally {
+      connection.end();
+    }
+  }
+
+  async getUserById(userId) {
+    const connection = await this.getConnection();
+    try {
+      const [user] = await this.query(connection, 'SELECT id, name, email FROM user WHERE id=?', [userId]);
+      if (!user) {
+        return null;
+      }
+      const roleRows = await this.query(connection, 'SELECT role, objectId FROM userRole WHERE userId=?', [userId]);
+      user.roles = roleRows.map(({ role, objectId }) => ({ objectId: objectId || undefined, role }));
+      return user;
+    } finally {
+      connection.end();
+    }
+  }
+
+  async getUsers(page = 1, limit = 10, nameFilter = '*') {
+    const connection = await this.getConnection();
+    try {
+      const offset = (page - 1) * limit;
+      const pattern = nameFilter.replace(/\*/g, '%');
+      let users = await this.query(
+        connection,
+        'SELECT id, name, email FROM user WHERE name LIKE ? ORDER BY id LIMIT ? OFFSET ?',
+        [pattern, limit + 1, offset],
+      );
+      const more = users.length > limit;
+      if (more) {
+        users = users.slice(0, limit);
+      }
+      if (users.length === 0) {
+        return { users, more };
+      }
+
+      const placeholders = users.map(() => '?').join(', ');
+      const roleRows = await this.query(
+        connection,
+        `SELECT userId, role, objectId FROM userRole WHERE userId IN (${placeholders}) ORDER BY id`,
+        users.map(({ id }) => id),
+      );
+      const rolesByUser = new Map();
+      for (const { userId, role, objectId } of roleRows) {
+        const roles = rolesByUser.get(userId) || [];
+        roles.push({ objectId: objectId || undefined, role });
+        rolesByUser.set(userId, roles);
+      }
+      users = users.map((user) => ({ ...user, roles: rolesByUser.get(user.id) || [] }));
+      return { users, more };
+    } finally {
+      connection.end();
+    }
+  }
+
+  async deleteUser(userId) {
+    const connection = await this.getConnection();
+    try {
+      await connection.beginTransaction();
+      try {
+        await this.query(connection, 'DELETE FROM auth WHERE userId=?', [userId]);
+        await this.query(connection, 'DELETE FROM userRole WHERE userId=?', [userId]);
+        const result = await this.query(connection, 'DELETE FROM user WHERE id=?', [userId]);
+        if (result.affectedRows === 0) {
+          await connection.rollback();
+          return false;
+        }
+        await connection.commit();
+        return true;
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      }
     } finally {
       connection.end();
     }
